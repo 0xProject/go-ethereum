@@ -286,12 +286,14 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	if currentBlock := bc.CurrentBlock(); currentBlock != nil && currentHeader.Number.Uint64() < currentBlock.NumberU64() {
 		bc.currentBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
 	}
-	if currentBlock := bc.CurrentBlock(); currentBlock != nil {
-		if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
-			// Rewound state missing, rolled back to before pivot, reset to genesis
-			bc.currentBlock.Store(bc.genesisBlock)
-		}
-	}
+	// if currentBlock := bc.CurrentBlock(); currentBlock != nil {
+	// 	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
+	// 		// Rewound state missing, rolled back to before pivot, reset to genesis
+	// 		log.Warn("!!! Resetting to genesis block this has been edited !!!")
+	// 		log.Warn("this was the erorr: " + err.Error())
+	// 		bc.currentBlock.Store(bc.genesisBlock)
+	// 	}
+	// }
 	// Rewind the fast block in a simpleton way to the target head
 	if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock != nil && currentHeader.Number.Uint64() < currentFastBlock.NumberU64() {
 		bc.currentFastBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
