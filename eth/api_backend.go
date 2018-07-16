@@ -88,6 +88,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 	}
 	// Otherwise resolve and return the block
 	if blockNr == rpc.LatestBlockNumber {
+		fmt.Printf("HeaderByNumber: %d\n", b.eth.blockchain.CurrentBlock().NumberU64())
 		return b.eth.blockchain.CurrentBlock().Header(), nil
 	}
 	return b.eth.blockchain.GetHeaderByNumber(uint64(blockNr)), nil

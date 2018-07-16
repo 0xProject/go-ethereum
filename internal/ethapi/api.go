@@ -621,6 +621,8 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	if state == nil || err != nil {
 		return nil, 0, false, err
 	}
+	fmt.Printf("inside doCall() -- blockNumber: %d, header.time: %d\n", blockNr.Int64(), header.Time.Int64())
+
 	// Set sender address or use a default if none specified
 	addr := args.From
 	if addr == (common.Address{}) {
@@ -1457,6 +1459,7 @@ func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 // IncreaseTime increase the time offset for the clock used in consensus and
 // mining. It has the effect of changing the timestamp of the next mined block.
 func (api *PrivateDebugAPI) IncreaseTime(seconds uint64) (uint64, error) {
+	log.Info("Adding time offset", "seconds", seconds)
 	offset, err := aclock.AddOffset(time.Duration(seconds) * time.Second)
 	if err != nil {
 		return 0, err
