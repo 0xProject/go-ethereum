@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/aclock"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -476,7 +477,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	}
 	log.Info("Exporting batch of blocks", "count", last-first+1)
 
-	start, reported := time.Now(), time.Now()
+	start, reported := aclock.Now(), aclock.Now()
 	for nr := first; nr <= last; nr++ {
 		block := bc.GetBlockByNumber(nr)
 		if block == nil {
@@ -487,7 +488,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 		}
 		if time.Since(reported) >= statsReportLimit {
 			log.Info("Exporting blocks", "exported", block.NumberU64()-first, "elapsed", common.PrettyDuration(time.Since(start)))
-			reported = time.Now()
+			reported = aclock.Now()
 		}
 	}
 
@@ -835,7 +836,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 	var (
 		stats = struct{ processed, ignored int32 }{}
-		start = time.Now()
+		start = aclock.Now()
 		bytes = 0
 		batch = bc.db.NewBatch()
 	)
@@ -1052,7 +1053,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
 func (bc *BlockChain) addFutureBlock(block *types.Block) error {
-	max := big.NewInt(time.Now().Unix() + maxTimeFutureBlocks)
+	max := big.NewInt(aclock.Now().Unix() + maxTimeFutureBlocks)
 	if block.Time().Cmp(max) > 0 {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
@@ -1185,7 +1186,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			return it.index, events, coalescedLogs, ErrBlacklistedHash
 		}
 		// Retrieve the parent block and it's state to execute on top
-		start := time.Now()
+		start := aclock.Now()
 
 		parent := it.previous()
 		if parent == nil {
@@ -1196,9 +1197,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			return it.index, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
-		t0 := time.Now()
+		t0 := aclock.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
-		t1 := time.Now()
+		t1 := aclock.Now()
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
@@ -1208,12 +1209,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
-		t2 := time.Now()
+		t2 := aclock.Now()
 		proctime := time.Since(start)
 
 		// Write the block to the chain and get the status.
 		status, err := bc.WriteBlockWithState(block, receipts, state)
-		t3 := time.Now()
+		t3 := aclock.Now()
 		if err != nil {
 			return it.index, events, coalescedLogs, err
 		}
@@ -1313,7 +1314,7 @@ func (bc *BlockChain) insertSidechain(it *insertIterator) (int, []interface{}, [
 		externTd = new(big.Int).Add(externTd, block.Difficulty())
 
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
-			start := time.Now()
+			start := aclock.Now()
 			if err := bc.WriteBlockWithoutState(block, externTd); err != nil {
 				return it.index, nil, nil, err
 			}
@@ -1584,7 +1585,7 @@ Error: %v
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
 func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
-	start := time.Now()
+	start := aclock.Now()
 	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err
 	}

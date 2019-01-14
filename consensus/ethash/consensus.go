@@ -26,6 +26,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/aclock"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -247,7 +248,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 			return errLargeBlockTime
 		}
 	} else {
-		if header.Time.Cmp(big.NewInt(time.Now().Add(allowedFutureBlockTime).Unix())) > 0 {
+		if header.Time.Cmp(big.NewInt(aclock.Now().Add(allowedFutureBlockTime).Unix())) > 0 {
 			return consensus.ErrFutureBlock
 		}
 	}
