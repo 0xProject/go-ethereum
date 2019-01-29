@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/aclock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -249,7 +250,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 	number := header.Number.Uint64()
 
 	// Don't waste time checking blocks from the future
-	if header.Time > uint64(time.Now().Unix()) {
+	if int64(header.Time) > aclock.Now().Unix() {
 		return consensus.ErrFutureBlock
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
@@ -541,8 +542,8 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 		return consensus.ErrUnknownAncestor
 	}
 	header.Time = parent.Time + c.config.Period
-	if header.Time < uint64(time.Now().Unix()) {
-		header.Time = uint64(time.Now().Unix())
+	if int64(header.Time) < aclock.Now().Unix() {
+		header.Time = uint64(aclock.Now().Unix())
 	}
 	return nil
 }
@@ -607,7 +608,7 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, results c
 		}
 	}
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	delay := time.Unix(int64(header.Time), 0).Sub(aclock.Now()) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
