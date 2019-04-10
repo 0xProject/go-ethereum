@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -58,36 +57,36 @@ func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
 
 	fmt.Printf("SetHead(%d)\n", number)
-	// // Note: Suddenly changing the state of the blockchain can break other parts
-	// // of the codebase that are holding on to some state, in some cases causing
-	// // crashes. In order to prevent that, we need to stop and reset the miner,
-	// // txpool, and consensus engine.
-	wasMining := b.eth.miner.Mining()
-	fmt.Printf("wasMining: %t\n", wasMining)
-	if wasMining {
-		fmt.Println("Stoping miner...")
-		b.eth.miner.Stop()
-	}
-	fmt.Println("Stopping txPool...")
-	b.eth.txPool.Stop()
-	fmt.Printf("Setting new head to %d...\n", number)
+	// Note: Suddenly changing the state of the blockchain can break other parts
+	// of the codebase that are holding on to some state, in some cases causing
+	// crashes. In order to prevent that, we need to stop and reset the miner,
+	// txpool, and consensus engine.
+	// wasMining := b.eth.miner.Mining()
+	// fmt.Printf("wasMining: %t\n", wasMining)
+	// if wasMining {
+	// 	fmt.Println("Stoping miner...")
+	// 	b.eth.miner.Stop()
+	// }
+	// fmt.Println("Stopping txPool...")
+	// b.eth.txPool.Stop()
+	// fmt.Printf("Setting new head to %d...\n", number)
 	b.eth.blockchain.SetHead(number)
-	fmt.Println("Creating new txPool...")
-	b.eth.txPool = core.NewTxPool(b.eth.config.TxPool, b.eth.blockchain.Config(), b.eth.blockchain)
-	if b.eth.blockchain.Config().Clique != nil {
-		cliqueConfig := b.eth.blockchain.Config().Clique
-		fmt.Println("Closing existing Clique engine...")
-		b.eth.engine.Close()
-		fmt.Println("Creating new Clique engine...")
-		b.eth.engine = clique.New(cliqueConfig, b.eth.chainDb)
-	}
-	if wasMining {
-		// TODO(albrow): Set the same number of cores as before
-		fmt.Println("Starting miner again...")
-		if err := b.eth.StartMining(1); err != nil {
-			panic(fmt.Errorf("could not start miner: %s", err.Error()))
-		}
-	}
+	// fmt.Println("Creating new txPool...")
+	// b.eth.txPool = core.NewTxPool(b.eth.config.TxPool, b.eth.blockchain.Config(), b.eth.blockchain)
+	// if b.eth.blockchain.Config().Clique != nil {
+	// 	cliqueConfig := b.eth.blockchain.Config().Clique
+	// 	fmt.Println("Closing existing Clique engine...")
+	// 	b.eth.engine.Close()
+	// 	fmt.Println("Creating new Clique engine...")
+	// 	b.eth.engine = clique.New(cliqueConfig, b.eth.chainDb)
+	// }
+	// if wasMining {
+	// 	// TODO(albrow): Set the same number of cores as before
+	// 	fmt.Println("Starting miner again...")
+	// 	if err := b.eth.StartMining(1); err != nil {
+	// 		panic(fmt.Errorf("could not start miner: %s", err.Error()))
+	// 	}
+	// }
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {

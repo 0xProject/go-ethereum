@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -526,6 +527,7 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
+				fmt.Println("Block sealing failed ", err.Error())
 				log.Warn("Block sealing failed", "err", err)
 			}
 		case <-w.exitCh:
@@ -698,6 +700,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 
 	receipt, _, err := core.ApplyTransaction(w.config, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
+		fmt.Printf("Error in core.ApplyTransaction: %s\n", err.Error())
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
 	}

@@ -307,16 +307,13 @@ func (pool *TxPool) loop() {
 		// Handle ChainHeadEvent
 		case ev := <-pool.chainHeadCh:
 			if ev.Block != nil {
-				fmt.Println("loop() (case <-pool.chainHeadCh) waiting for lock")
 				pool.mu.Lock()
-				fmt.Println("loop() (case <-pool.chainHeadCh) acquired lock")
 				if pool.chainconfig.IsHomestead(ev.Block.Number()) {
 					pool.homestead = true
 				}
 				pool.reset(head.Header(), ev.Block.Header())
 				head = ev.Block
 
-				fmt.Println("loop() (case <-pool.chainHeadCh) released lock")
 				pool.mu.Unlock()
 			}
 		// Be unsubscribed due to system stopped
@@ -337,9 +334,7 @@ func (pool *TxPool) loop() {
 
 		// Handle inactive account transaction eviction
 		case <-evict.C:
-			fmt.Println("loop() (case <-evict.C) waiting for lock")
 			pool.mu.Lock()
-			fmt.Println("loop() (case <-evict.C) acquired lock")
 			for addr := range pool.queue {
 				// Skip local transactions from the eviction mechanism
 				if pool.locals.contains(addr) {
@@ -352,19 +347,15 @@ func (pool *TxPool) loop() {
 					}
 				}
 			}
-			fmt.Println("loop() (case <-evict.C) released lock")
 			pool.mu.Unlock()
 
 		// Handle local transaction journal rotation
 		case <-journal.C:
 			if pool.journal != nil {
-				fmt.Println("loop() (case <-journal.C) waiting for lock")
 				pool.mu.Lock()
-				fmt.Println("loop() (case <-journal.C) acquired lock")
 				if err := pool.journal.rotate(pool.local()); err != nil {
 					log.Warn("Failed to rotate local tx journal", "err", err)
 				}
-				fmt.Println("loop() (case <-journal.C) released lock")
 				pool.mu.Unlock()
 			}
 		}
@@ -374,11 +365,8 @@ func (pool *TxPool) loop() {
 // lockedReset is a wrapper around reset to allow calling it in a thread safe
 // manner. This method is only ever used in the tester!
 func (pool *TxPool) lockedReset(oldHead, newHead *types.Header) {
-	fmt.Println("lockedReset waiting for lock")
 	pool.mu.Lock()
-	fmt.Println("lockedReset acquired lock")
 	defer func() {
-		fmt.Println("lockedReset released lock")
 		pool.mu.Unlock()
 	}()
 
@@ -516,11 +504,8 @@ func (pool *TxPool) GasPrice() *big.Int {
 // SetGasPrice updates the minimum price required by the transaction pool for a
 // new transaction, and drops all transactions below this threshold.
 func (pool *TxPool) SetGasPrice(price *big.Int) {
-	fmt.Println("SetGasPrice waiting for lock")
 	pool.mu.Lock()
-	fmt.Println("SetGasPrice acquired lock")
 	defer func() {
-		fmt.Println("SetGasPrice released lock")
 		pool.mu.Unlock()
 	}()
 
@@ -565,11 +550,8 @@ func (pool *TxPool) stats() (int, int) {
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	fmt.Println("Content() waiting for lock")
 	pool.mu.Lock()
-	fmt.Println("Content() acquired lock")
 	defer func() {
-		fmt.Println("Content() released lock")
 		pool.mu.Unlock()
 	}()
 
@@ -588,11 +570,8 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 // account and sorted by nonce. The returned transaction set is a copy and can be
 // freely modified by calling code.
 func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
-	fmt.Println("Pending() waiting for lock")
 	pool.mu.Lock()
-	fmt.Println("Pending() acquired lock")
 	defer func() {
-		fmt.Println("Pending() released lock")
 		pool.mu.Unlock()
 	}()
 
@@ -605,11 +584,8 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 
 // Locals retrieves the accounts currently considered local by the pool.
 func (pool *TxPool) Locals() []common.Address {
-	fmt.Println("Locals() waiting for lock")
 	pool.mu.Lock()
-	fmt.Println("Locals() acquired lock")
 	defer func() {
-		fmt.Println("Locals() released lock")
 		pool.mu.Unlock()
 	}()
 
@@ -870,11 +846,8 @@ func (pool *TxPool) addTx(tx *types.Transaction, local bool) error {
 	// Cache sender in transaction before obtaining lock (pool.signer is immutable)
 	types.Sender(pool.signer, tx)
 
-	fmt.Println("addTx waiting for lock")
 	pool.mu.Lock()
-	fmt.Println("addTx acquired lock")
 	defer func() {
-		fmt.Println("addTx released lock")
 		pool.mu.Unlock()
 	}()
 
@@ -897,11 +870,8 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local bool) []error {
 	for _, tx := range txs {
 		types.Sender(pool.signer, tx)
 	}
-	fmt.Println("addTxs waiting for lock")
 	pool.mu.Lock()
-	fmt.Println("addTxs acquired lock")
 	defer func() {
-		fmt.Println("addTxs released lock")
 		pool.mu.Unlock()
 	}()
 

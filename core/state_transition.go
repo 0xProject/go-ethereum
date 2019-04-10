@@ -168,9 +168,14 @@ func (st *StateTransition) preCheck() error {
 	// Make sure this transaction's nonce is correct.
 	if st.msg.CheckNonce() {
 		nonce := st.state.GetNonce(st.msg.From())
-		if nonce < st.msg.Nonce() {
-			return ErrNonceTooHigh
-		} else if nonce > st.msg.Nonce() {
+		// TOOD(albrow): Either make NonceCheck optional or figure out how to update
+		// the expected nonce in the event of SetHead being called.
+		// if nonce < st.msg.Nonce() {
+		// 	return ErrNonceTooHigh
+		// } else if nonce > st.msg.Nonce() {
+		// 	return ErrNonceTooLow
+		// }
+		if nonce > st.msg.Nonce() {
 			return ErrNonceTooLow
 		}
 	}
