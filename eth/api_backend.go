@@ -55,6 +55,7 @@ func (b *EthAPIBackend) CurrentBlock() *types.Block {
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
+	b.eth.txPool.Flush()
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
