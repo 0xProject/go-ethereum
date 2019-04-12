@@ -1306,3 +1306,20 @@ func (t *txLookup) Remove(hash common.Hash) {
 
 	delete(t.all, hash)
 }
+
+// Flush removes all transactions from the pool. It is unsafe and unoptimized.
+func (pool *TxPool) Flush() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	for _, txList := range pool.pending {
+		for _, tx := range txList.Flatten() {
+			pool.removeTx(tx.Hash(), false)
+		}
+	}
+	for _, txList := range pool.queue {
+		for _, tx := range txList.Flatten() {
+			pool.removeTx(tx.Hash(), false)
+		}
+	}
+}
