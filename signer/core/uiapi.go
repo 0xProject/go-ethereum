@@ -15,6 +15,8 @@
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 //
 
+// +build !js
+
 package core
 
 import (
