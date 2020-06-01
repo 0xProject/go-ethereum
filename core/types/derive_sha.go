@@ -17,11 +17,7 @@
 package types
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 type DerivableList interface {
@@ -29,13 +25,10 @@ type DerivableList interface {
 	GetRlp(i int) []byte
 }
 
+// HACK(jalextowle): We stub out this function in order to avoid removing this
+// file from the WebAssembly build. This function (and it's dependants) are not
+// used by Mesh, so this doesn't break any of our code. Removing this file
+// completely breaks many files that Mesh does depend on indirectly.
 func DeriveSha(list DerivableList) common.Hash {
-	keybuf := new(bytes.Buffer)
-	trie := new(trie.Trie)
-	for i := 0; i < list.Len(); i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), list.GetRlp(i))
-	}
-	return trie.Hash()
+	return common.HexToHash("deadbeef")
 }
