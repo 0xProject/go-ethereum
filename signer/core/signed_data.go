@@ -33,8 +33,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+// HACK(jalextowle): This is stubbed out because it's dependency on the
+// `consensus/clique` package caused build issues in WebAssembly code, but it
+// must exist to avoid linting errors.
+func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
+	return []byte{}, []byte{}, err
+}
 
 type SigFormat struct {
 	Mime        string
