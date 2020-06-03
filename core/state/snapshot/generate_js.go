@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !js
+// +build js, wasm
 
 package snapshot
 
@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -106,7 +105,6 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		diskdb:     diskdb,
 		triedb:     triedb,
 		root:       root,
-		cache:      fastcache.New(cache * 1024 * 1024),
 		genMarker:  []byte{}, // Initialized but empty!
 		genPending: make(chan struct{}),
 		genAbort:   make(chan chan *generatorStats),

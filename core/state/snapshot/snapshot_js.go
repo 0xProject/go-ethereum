@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !js
+// +build js, wasm
 
 // Package snapshot implements a journalled, dynamic state dump.
 package snapshot
@@ -438,13 +438,11 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		}
 		// Remove all storage slots
 		rawdb.DeleteAccountSnapshot(batch, hash)
-		base.cache.Set(hash[:], nil)
 
 		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
 		for it.Next() {
 			if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
 				batch.Delete(key)
-				base.cache.Del(key[1:])
 
 				snapshotFlushStorageItemMeter.Mark(1)
 			}
@@ -459,7 +457,6 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		}
 		// Push the account to disk
 		rawdb.WriteAccountSnapshot(batch, hash, data)
-		base.cache.Set(hash[:], data)
 		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 
 		if batch.ValueSize() > ethdb.IdealBatchSize {
@@ -487,11 +484,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			}
 			if len(data) > 0 {
 				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
-				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
 				snapshotCleanStorageWriteMeter.Mark(int64(len(data)))
 			} else {
 				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
-				base.cache.Set(append(accountHash[:], storageHash[:]...), nil)
 			}
 			snapshotFlushStorageItemMeter.Mark(1)
 			snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
@@ -510,7 +505,6 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	}
 	res := &diskLayer{
 		root:       bottom.root,
-		cache:      base.cache,
 		diskdb:     base.diskdb,
 		triedb:     base.triedb,
 		genMarker:  base.genMarker,

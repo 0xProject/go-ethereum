@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !js
+// +build js, wasm
 
 package snapshot
 
@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -34,7 +33,6 @@ import (
 type diskLayer struct {
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
 	triedb *trie.Database      // Trie node cache for reconstuction purposes
-	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot
 	stale bool        // Signals that the layer became stale (state progressed)
@@ -101,15 +99,8 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	// If we're in the disk layer, all diff layers missed
 	snapshotDirtyAccountMissMeter.Mark(1)
 
-	// Try to retrieve the account from the memory cache
-	if blob, found := dl.cache.HasGet(nil, hash[:]); found {
-		snapshotCleanAccountHitMeter.Mark(1)
-		snapshotCleanAccountReadMeter.Mark(int64(len(blob)))
-		return blob, nil
-	}
 	// Cache doesn't contain account, pull from disk and cache for later
 	blob := rawdb.ReadAccountSnapshot(dl.diskdb, hash)
-	dl.cache.Set(hash[:], blob)
 
 	snapshotCleanAccountMissMeter.Mark(1)
 	if n := len(blob); n > 0 {
@@ -141,15 +132,8 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	// If we're in the disk layer, all diff layers missed
 	snapshotDirtyStorageMissMeter.Mark(1)
 
-	// Try to retrieve the storage slot from the memory cache
-	if blob, found := dl.cache.HasGet(nil, key); found {
-		snapshotCleanStorageHitMeter.Mark(1)
-		snapshotCleanStorageReadMeter.Mark(int64(len(blob)))
-		return blob, nil
-	}
 	// Cache doesn't contain storage slot, pull from disk and cache for later
 	blob := rawdb.ReadStorageSnapshot(dl.diskdb, accountHash, storageHash)
-	dl.cache.Set(key, blob)
 
 	snapshotCleanStorageMissMeter.Mark(1)
 	if n := len(blob); n > 0 {

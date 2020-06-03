@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !js
+// +build js, wasm
 
 package snapshot
 
@@ -26,7 +26,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -74,7 +73,6 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	base := &diskLayer{
 		diskdb: diskdb,
 		triedb: triedb,
-		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
 	// Retrieve the journal, it must exist since even for 0 layer it stores whether
