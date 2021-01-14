@@ -3,7 +3,7 @@
 These data types are defined in the channel between clef and the UI
 ### SignDataRequest
 
-SignDataRequest contains information about a pending request to sign some data. The data to be signed can be of various types, defined by content-type. Clef has done most of the work in canonicalizing and making sense of the data, and it's up to the UI to presentthe user with the contents of the `message`
+SignDataRequest contains information about a pending request to sign some data. The data to be signed can be of various types, defined by content-type. Clef has done most of the work in canonicalizing and making sense of the data, and it's up to the UI to present the user with the contents of the `message`
 
 Example:
 ```json
@@ -11,7 +11,7 @@ Example:
   "content_type": "text/plain",
   "address": "0xDEADbEeF000000000000000000000000DeaDbeEf",
   "raw_data": "GUV0aGVyZXVtIFNpZ25lZCBNZXNzYWdlOgoxMWhlbGxvIHdvcmxk",
-  "message": [
+  "messages": [
     {
       "name": "message",
       "value": "\u0019Ethereum Signed Message:\n11hello world",
@@ -133,7 +133,7 @@ This occurs _after_ successful completion of the entire signing procedure, but r
 
 A ruleset that implements a rate limitation needs to know what transactions are sent out to the external interface. By hooking into this methods, the ruleset can maintain track of that count.
 
-**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content. 
+**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content.
 
 The `OnApproved` method cannot be responded to, it's purely informative
 
@@ -179,7 +179,7 @@ Example:
 ```
 ### ListRequest
 
-Sent when a request has been made to list addresses. The UI is provided with the full `account`s, including local directory names. Note: this information is not passed back to the external caller, who only sees the `address`es. 
+Sent when a request has been made to list addresses. The UI is provided with the full `account`s, including local directory names. Note: this information is not passed back to the external caller, who only sees the `address`es.
 
 Example:
 ```json

@@ -1,61 +1,22 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
-matrix:
+jobs:
+  allow_failures:
+    - stage: build
+      os: osx
+      go: 1.14.x
+      env:
+        - azure-osx
+        - azure-ios
+        - cocoapods-ios
+
   include:
-    - os: linux
-      dist: xenial
-      sudo: required
-      go: 1.10.x
-      script:
-      - sudo modprobe fuse
-      - sudo chmod 666 /dev/fuse
-      - sudo chown root:$USER /etc/fuse.conf
-      - go run build/ci.go install
-      - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - os: linux
-      dist: xenial
-      sudo: required
-      go: 1.11.x
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    # These are the latest Go versions.
-    - os: linux
-      dist: xenial
-      sudo: required
-      go: 1.12.x
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - os: osx
-      go: 1.12.x
-      script:
-        - echo "Increase the maximum number of open file descriptors on macOS"
-        - NOFILE=20480
-        - sudo sysctl -w kern.maxfiles=$NOFILE
-        - sudo sysctl -w kern.maxfilesperproc=$NOFILE
-        - sudo launchctl limit maxfiles $NOFILE $NOFILE
-        - sudo launchctl limit maxfiles
-        - ulimit -S -n $NOFILE
-        - ulimit -n
-        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
     # This builder only tests code linters on latest version of Go
-    - os: linux
+    - stage: lint
+      os: linux
       dist: xenial
-      go: 1.12.x
+      go: 1.15.x
       env:
         - lint
       git:
@@ -64,12 +25,14 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - if: repo = ethereum/go-ethereum AND type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
-      go: 1.12.x
+      go: 1.15.x
       env:
         - ubuntu-ppa
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -86,13 +49,15 @@ matrix:
         - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       sudo: required
-      go: 1.12.x
+      go: 1.15.x
       env:
         - azure-linux
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -101,33 +66,35 @@ matrix:
             - gcc-multilib
       script:
         # Build for the primary platforms that Trusty can manage
-        - go run build/ci.go install
+        - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - go run build/ci.go install -arch 386
+        - go run build/ci.go install -dlgo -arch 386
         - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
         # Switch over GCC to cross compilation (breaks 386, hence why do it here only)
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         - sudo ln -s /usr/include/asm-generic /usr/include/asm
 
-        - GOARM=5 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=5 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
         - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=6 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=6 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
         - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=7 go run build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
+        - GOARM=7 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabihf-gcc
         - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - go run build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
+        - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       services:
         - docker
-      go: 1.12.x
+      go: 1.15.x
       env:
         - azure-linux-mips
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -148,7 +115,8 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       addons:
@@ -167,10 +135,11 @@ matrix:
       env:
         - azure-android
         - maven-android
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://dl.google.com/go/go1.12.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.15.5.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -185,17 +154,19 @@ matrix:
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - stage: build
+      if: type = push
       os: osx
-      go: 1.12.x
+      go: 1.15.x
       env:
         - azure-osx
         - azure-ios
         - cocoapods-ios
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
-        - go run build/ci.go install
+        - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
         # Build the iOS framework and upload it to CocoaPods and Azure
@@ -213,23 +184,47 @@ matrix:
         - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
-    # This builder does the Azure archive purges to avoid accumulating junk
-    - if: repo = ethereum/go-ethereum AND type = cron
+    # These builders run the tests
+    - stage: build
+      os: linux
+      arch: amd64
+      dist: xenial
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
+      if: type = pull_request
+      os: linux
+      arch: arm64
+      dist: xenial
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
       os: linux
       dist: xenial
-      go: 1.12.x
+      go: 1.14.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    # This builder does the Azure archive purges to avoid accumulating junk
+    - stage: build
+      if: type = cron
+      os: linux
+      dist: xenial
+      go: 1.15.x
       env:
         - azure-purge
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
-
-    - name: Race Detector for Swarm
-      if: repo = ethersphere/go-ethereum
-      os: linux
-      dist: xenial
-      go: 1.12.x
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script: ./build/travis_keepalive.sh go test -timeout 20m -race ./swarm... ./p2p/{protocols,simulations,testing}/...

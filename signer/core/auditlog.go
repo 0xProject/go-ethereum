@@ -1,23 +1,26 @@
 // Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// +build !js
 
 package core
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -61,11 +64,30 @@ func (l *AuditLogger) SignTransaction(ctx context.Context, args SendTxArgs, meth
 }
 
 func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error) {
+	marshalledData, _ := json.Marshal(data) // can ignore error, marshalling what we just unmarshalled
 	l.log.Info("SignData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"addr", addr.String(), "data", data, "content-type", contentType)
+		"addr", addr.String(), "data", marshalledData, "content-type", contentType)
 	b, e := l.api.SignData(ctx, contentType, addr, data)
 	l.log.Info("SignData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
 	return b, e
+}
+
+func (l *AuditLogger) SignGnosisSafeTx(ctx context.Context, addr common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
+	sel := "<nil>"
+	if methodSelector != nil {
+		sel = *methodSelector
+	}
+	data, _ := json.Marshal(gnosisTx) // can ignore error, marshalling what we just unmarshalled
+	l.log.Info("SignGnosisSafeTx", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"addr", addr.String(), "data", string(data), "selector", sel)
+	res, e := l.api.SignGnosisSafeTx(ctx, addr, gnosisTx, methodSelector)
+	if res != nil {
+		data, _ := json.Marshal(res) // can ignore error, marshalling what we just unmarshalled
+		l.log.Info("SignGnosisSafeTx", "type", "response", "data", string(data), "error", e)
+	} else {
+		l.log.Info("SignGnosisSafeTx", "type", "response", "data", res, "error", e)
+	}
+	return res, e
 }
 
 func (l *AuditLogger) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error) {
