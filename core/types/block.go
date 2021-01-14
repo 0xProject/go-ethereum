@@ -23,16 +23,21 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
-var EmptyUncleHash = rlpHash([]*Header(nil))
+var (
+	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyUncleHash = rlpHash([]*Header(nil))
+)
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
 // mix-hash) that a sufficient amount of computation has been carried
@@ -126,11 +131,31 @@ func (h *Header) SanityCheck() error {
 	return nil
 }
 
+// hasherPool holds LegacyKeccak hashers.
+var hasherPool = sync.Pool{
+	New: func() interface{} {
+		return sha3.NewLegacyKeccak256()
+	},
+}
+
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewLegacyKeccak256()
-	rlp.Encode(hw, x)
-	hw.Sum(h[:0])
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	rlp.Encode(sha, x)
+	sha.Read(h[:])
 	return h
+}
+
+// EmptyBody returns true if there is no additional 'body' to complete the header
+// that is: no transactions and no uncles.
+func (h *Header) EmptyBody() bool {
+	return h.TxHash == EmptyRootHash && h.UncleHash == EmptyUncleHash
+}
+
+// EmptyReceipts returns true if there are no receipts for this header/block.
+func (h *Header) EmptyReceipts() bool {
+	return h.ReceiptHash == EmptyRootHash
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
@@ -187,6 +212,45 @@ type storageblock struct {
 	Txs    []*Transaction
 	Uncles []*Header
 	TD     *big.Int
+}
+
+// NewBlock creates a new block. The input data is copied,
+// changes to header and to the field values will not affect the
+// block.
+//
+// The values of TxHash, UncleHash, ReceiptHash and Bloom in header
+// are ignored and set to values derived from the given txs, uncles
+// and receipts.
+func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher Hasher) *Block {
+	b := &Block{header: CopyHeader(header), td: new(big.Int)}
+
+	// TODO: panic if len(txs) != len(receipts)
+	if len(txs) == 0 {
+		b.header.TxHash = EmptyRootHash
+	} else {
+		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
+		b.transactions = make(Transactions, len(txs))
+		copy(b.transactions, txs)
+	}
+
+	if len(receipts) == 0 {
+		b.header.ReceiptHash = EmptyRootHash
+	} else {
+		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
+		b.header.Bloom = CreateBloom(receipts)
+	}
+
+	if len(uncles) == 0 {
+		b.header.UncleHash = EmptyUncleHash
+	} else {
+		b.header.UncleHash = CalcUncleHash(uncles)
+		b.uncles = make([]*Header, len(uncles))
+		for i := range uncles {
+			b.uncles[i] = CopyHeader(uncles[i])
+		}
+	}
+
+	return b
 }
 
 // NewBlockWithHeader creates a block with the given header data. The

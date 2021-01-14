@@ -94,7 +94,7 @@ func (t *Type) isReferenceType() bool {
 	if len(t.Type) == 0 {
 		return false
 	}
-	// Reference types must have a leading uppercase characer
+	// Reference types must have a leading uppercase character
 	return unicode.IsUpper([]rune(t.Type)[0])
 }
 
@@ -117,20 +117,56 @@ type TypedDataDomain struct {
 
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 
-// Metadata about a request
-type Metadata struct {
-	Remote    string `json:"remote"`
-	Local     string `json:"local"`
-	Scheme    string `json:"scheme"`
-	UserAgent string `json:"User-Agent"`
-	Origin    string `json:"Origin"`
+// sign receives a request and produces a signature
+//
+// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
+// where the V value will be 27 or 28 for legacy reasons, if legacyV==true.
+func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
+	// We make the request prior to looking up if we actually have the account, to prevent
+	// account-enumeration via the API
+	res, err := api.UI.ApproveSignData(req)
+	if err != nil {
+		return nil, err
+	}
+	if !res.Approved {
+		return nil, ErrRequestDenied
+	}
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: req.Address.Address()}
+	wallet, err := api.am.Find(account)
+	if err != nil {
+		return nil, err
+	}
+	pw, err := api.lookupOrQueryPassword(account.Address,
+		"Password for signing",
+		fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
+	if err != nil {
+		return nil, err
+	}
+	// Sign the data with the wallet
+	signature, err := wallet.SignDataWithPassphrase(account, pw, req.ContentType, req.Rawdata)
+	if err != nil {
+		return nil, err
+	}
+	if legacyV {
+		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	}
+	return signature, nil
 }
 
-// String implements Stringer interface
-func (m Metadata) String() string {
-	s, err := json.Marshal(m)
-	if err == nil {
-		return string(s)
+// SignData signs the hash of the provided data, but does so differently
+// depending on the content-type specified.
+//
+// Different types of validation occur.
+func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error) {
+	var req, transformV, err = api.determineSignatureFormat(ctx, contentType, addr, data)
+	if err != nil {
+		return nil, err
+	}
+	signature, err := api.sign(req, transformV)
+	if err != nil {
+		api.UI.ShowError(err.Error())
+		return nil, err
 	}
 	return err.Error()
 }
@@ -150,6 +186,68 @@ type SignDataRequest struct {
 func SignTextValidator(validatorData ValidatorData) (hexutil.Bytes, string) {
 	msg := fmt.Sprintf("\x19\x00%s%s", string(validatorData.Address.Bytes()), string(validatorData.Message))
 	return crypto.Keccak256([]byte(msg)), msg
+}
+
+// cliqueHeaderHashAndRlp returns the hash which is used as input for the proof-of-authority
+// signing. It is the hash of the entire header apart from the 65 byte signature
+// contained at the end of the extra data.
+//
+// The method requires the extra data to be at least 65 bytes -- the original implementation
+// in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
+// and simply return an error instead
+func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
+	if len(header.Extra) < 65 {
+		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
+		return
+	}
+	rlp = clique.CliqueRLP(header)
+	hash = clique.SealHash(header).Bytes()
+	return hash, rlp, err
+}
+
+// SignTypedData signs EIP-712 conformant typed data
+// hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
+// It returns
+// - the signature,
+// - and/or any error
+func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
+	signature, _, err := api.signTypedData(ctx, addr, typedData, nil)
+	return signature, err
+}
+
+// signTypedData is identical to the capitalized version, except that it also returns the hash (preimage)
+// - the signature preimage (hash)
+func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAddress,
+	typedData TypedData, validationMessages *ValidationMessages) (hexutil.Bytes, hexutil.Bytes, error) {
+	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	if err != nil {
+		return nil, nil, err
+	}
+	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	if err != nil {
+		return nil, nil, err
+	}
+	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
+	sighash := crypto.Keccak256(rawData)
+	messages, err := typedData.Format()
+	if err != nil {
+		return nil, nil, err
+	}
+	req := &SignDataRequest{
+		ContentType: DataTyped.Mime,
+		Rawdata:     rawData,
+		Messages:    messages,
+		Hash:        sighash,
+		Address:     addr}
+	if validationMessages != nil {
+		req.Callinfo = validationMessages.Messages
+	}
+	signature, err := api.sign(req, true)
+	if err != nil {
+		api.UI.ShowError(err.Error())
+		return nil, nil, err
+	}
+	return signature, sighash, nil
 }
 
 // HashStruct generates a keccak256 hash of the encoding of the provided data
@@ -236,8 +334,8 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	buffer := bytes.Buffer{}
 
 	// Verify extra data
-	if len(typedData.Types[primaryType]) < len(data) {
-		return nil, errors.New("there is extra data provided in the message")
+	if exp, got := len(typedData.Types[primaryType]), len(data); exp < got {
+		return nil, fmt.Errorf("there is extra data provided in the message (%d < %d)", exp, got)
 	}
 
 	// Add typehash
@@ -295,6 +393,24 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		}
 	}
 	return buffer.Bytes(), nil
+}
+
+// Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
+func parseBytes(encType interface{}) ([]byte, bool) {
+	switch v := encType.(type) {
+	case []byte:
+		return v, true
+	case hexutil.Bytes:
+		return []byte(v), true
+	case string:
+		bytes, err := hexutil.Decode(v)
+		if err != nil {
+			return nil, false
+		}
+		return bytes, true
+	default:
+		return nil, false
+	}
 }
 
 func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
@@ -376,7 +492,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		}
 		return crypto.Keccak256([]byte(strVal)), nil
 	case "bytes":
-		bytesValue, ok := encValue.([]byte)
+		bytesValue, ok := parseBytes(encValue)
 		if !ok {
 			return nil, dataMismatchError(encType, encValue)
 		}
@@ -391,10 +507,13 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if length < 0 || length > 32 {
 			return nil, fmt.Errorf("invalid size on bytes: %d", length)
 		}
-		if byteValue, ok := encValue.(hexutil.Bytes); !ok {
+		if byteValue, ok := parseBytes(encValue); !ok || len(byteValue) != length {
 			return nil, dataMismatchError(encType, encValue)
 		} else {
-			return math.PaddedBigBytes(new(big.Int).SetBytes(byteValue), 32), nil
+			// Right-pad the bits
+			dst := make([]byte, 32)
+			copy(dst, byteValue)
+			return dst, nil
 		}
 	}
 	if strings.HasPrefix(encType, "int") || strings.HasPrefix(encType, "uint") {
@@ -600,7 +719,11 @@ func (nvt *NameValueType) Pprint(depth int) string {
 			output.WriteString(sublevel)
 		}
 	} else {
-		output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
+		if nvt.Value != nil {
+			output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
+		} else {
+			output.WriteString("\n")
+		}
 	}
 	return output.String()
 }
@@ -752,13 +875,7 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 // validate checks if the given domain is valid, i.e. contains at least
 // the minimum viable keys and values
 func (domain *TypedDataDomain) validate() error {
-	// HACK(albrow): We temporarily disable this check because it is incompatible
-	// with 0x protocol v2.
-	// if domain.ChainId == nil {
-	// 	return errors.New("chainId must be specified according to EIP-155")
-	// }
-
-	if len(domain.Name) == 0 && len(domain.Version) == 0 && len(domain.VerifyingContract) == 0 && len(domain.Salt) == 0 {
+	if domain.ChainId == nil && len(domain.Name) == 0 && len(domain.Version) == 0 && len(domain.VerifyingContract) == 0 && len(domain.Salt) == 0 {
 		return errors.New("domain is undefined")
 	}
 

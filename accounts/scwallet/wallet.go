@@ -362,7 +362,7 @@ func (w *Wallet) Open(passphrase string) error {
 				return err
 			}
 			// Pairing succeeded, fall through to PIN checks. This will of course fail,
-			// but we can't return ErrPINNeeded directly here becase we don't know whether
+			// but we can't return ErrPINNeeded directly here because we don't know whether
 			// a PIN check or a PIN reset is needed.
 			passphrase = ""
 		}
@@ -637,7 +637,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // to discover non zero accounts and automatically add them to list of tracked
 // accounts.
 //
-// Note, self derivaton will increment the last component of the specified path
+// Note, self derivation will increment the last component of the specified path
 // opposed to decending into a child path to allow discovering accounts starting
 // from non zero components.
 //

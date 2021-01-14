@@ -138,8 +138,17 @@ func (p *Peer) Node() *enode.Node {
 	return p.rw.node
 }
 
-// Name returns the node name that the remote node advertised.
+// Name returns an abbreviated form of the name
 func (p *Peer) Name() string {
+	s := p.rw.name
+	if len(s) > 20 {
+		return s[:20] + "..."
+	}
+	return s
+}
+
+// Fullname returns the node name that the remote node advertised.
+func (p *Peer) Fullname() string {
 	return p.rw.name
 }
 
@@ -304,6 +313,7 @@ func (p *Peer) handle(msg Msg) error {
 		if metrics.Enabled {
 			m := fmt.Sprintf("%s/%s/%d/%#02x", ingressMeterName, proto.Name, proto.Version, msg.Code-proto.offset)
 			metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
+			metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
 		}
 		select {
 		case proto.in <- msg:
@@ -462,7 +472,7 @@ func (p *Peer) Info() *PeerInfo {
 	info := &PeerInfo{
 		Enode:     p.Node().URLv4(),
 		ID:        p.ID().String(),
-		Name:      p.Name(),
+		Name:      p.Fullname(),
 		Caps:      caps,
 		Protocols: make(map[string]interface{}),
 	}
